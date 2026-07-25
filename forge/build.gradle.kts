@@ -1,6 +1,6 @@
 plugins {
     java
-    id("net.minecraftforge.gradle") version "7.0.31"
+    id("net.minecraftforge.gradle") version "6.0.46"
 }
 
 // Ensure :core is configured before we reference its jar task below.

@@ -14,7 +14,7 @@ repositories {
 
 dependencies {
     // Logging facade only; the loader (Forge/Paper) provides the binding at runtime.
-    compileOnly("org.slf4j:slf4j-api:2.0.18")
+    compileOnly("org.slf4j:slf4j-api:2.0.9")
 }
 
 tasks.withType<JavaCompile>().configureEach {
