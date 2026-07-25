@@ -1,27 +1,33 @@
 package com.mineui.serverutils.config;
 
 import java.nio.file.Path;
+import java.util.Set;
 
 public record AppConfig(
         String httpHost,
         int httpPort,
-        String rconHost,
-        int rconPort,
-        String rconPassword,
-        int rconTimeoutMs,
+        String authToken,
         String serverPropertiesPath
 ) {
+    private static final Set<String> LOOPBACK_HOSTS = Set.of("127.0.0.1", "localhost", "::1");
+
     public static AppConfig fromEnv(Path serverDir) {
-        String httpHost = getEnv("HTTP_HOST", "0.0.0.0");
+        String httpHost = getEnv("HTTP_HOST", "127.0.0.1");
         int httpPort = getEnvInt("HTTP_PORT", 8787);
-        String rconHost = getEnv("RCON_HOST", "127.0.0.1");
-        int rconPort = getEnvInt("RCON_PORT", 25575);
-        String rconPassword = getEnv("RCON_PASSWORD", "");
-        int rconTimeoutMs = getEnvInt("RCON_TIMEOUT_MS", 3000);
+        String authToken = getEnv("MINEUI_SERVER_UTILS_TOKEN", "");
         String defaultProperties = serverDir.resolve("server.properties").toString();
         String serverPropertiesPath = getEnv("SERVER_PROPERTIES_PATH", defaultProperties);
 
-        return new AppConfig(httpHost, httpPort, rconHost, rconPort, rconPassword, rconTimeoutMs, serverPropertiesPath);
+        return new AppConfig(httpHost, httpPort, authToken, serverPropertiesPath);
+    }
+
+    /** True when the configured bind address is a loopback-only interface. */
+    public boolean isLoopbackBind() {
+        return LOOPBACK_HOSTS.contains(httpHost);
+    }
+
+    public boolean hasAuthToken() {
+        return authToken != null && !authToken.isBlank();
     }
 
     private static String getEnv(String key, String defaultValue) {

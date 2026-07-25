@@ -4,19 +4,25 @@ import com.mineui.serverutils.service.StatusService;
 import com.mineui.serverutils.service.StatusService.MetricsSnapshot;
 import com.mineui.serverutils.service.StatusService.StatusSnapshot;
 import com.mineui.serverutils.runtime.ServerRuntime;
+import com.sun.net.httpserver.Filter;
+import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.List;
 import java.util.Map;
 
 public final class ApiHandlers {
     private ApiHandlers() {}
 
-    public static void register(HttpServer server, StatusService statusService) {
+    public static void register(HttpServer server, StatusService statusService, String authToken) {
+        Filter authFilter = (authToken != null && !authToken.isBlank()) ? new AuthFilter(authToken) : null;
+
+        // /health is intentionally unauthenticated so liveness probes work
+        // without the token; it returns no server data.
         server.createContext("/health", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
@@ -25,7 +31,7 @@ public final class ApiHandlers {
             send(exchange, 200, "ok");
         });
 
-        server.createContext("/properties", exchange -> {
+        protectedContext(server, authFilter, "/properties", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
@@ -34,35 +40,40 @@ public final class ApiHandlers {
             sendJson(exchange, 200, JsonUtil.object(properties));
         });
 
-        server.createContext("/players", exchange -> {
+        protectedContext(server, authFilter, "/players", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
             }
             StatusService.PlayersResult result = statusService.fetchPlayersDirect();
             if (!result.ok()) {
-                sendJson(exchange, 502, "{\"ok\":false,\"error\":" + JsonUtil.quote(result.errorMessage()) + "}");
+                sendJson(exchange, 503, "{\"ok\":false,\"error\":" + JsonUtil.quote(result.errorMessage()) + "}");
                 return;
             }
             String response = "{\"ok\":true,\"players\":" + JsonUtil.stringArray(result.players()) + "}";
             sendJson(exchange, 200, response);
         });
 
-        server.createContext("/tps", exchange -> {
+        protectedContext(server, authFilter, "/tps", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
             }
-            StatusService.CommandResult result = statusService.fetchTps();
+            StatusService.TpsResult result = statusService.fetchTpsDirect();
             if (!result.ok()) {
-                sendJson(exchange, 502, "{\"ok\":false,\"error\":" + JsonUtil.quote(result.errorMessage()) + "}");
+                sendJson(exchange, 503, "{\"ok\":false,\"error\":" + JsonUtil.quote(result.errorMessage()) + "}");
                 return;
             }
-            String response = "{\"ok\":true,\"raw\":" + JsonUtil.quote(result.output()) + "}";
+            StatusService.TpsSnapshot tps = result.tps();
+            String response = "{\"ok\":true"
+                    + ",\"one\":" + numberOrNull(tps.one())
+                    + ",\"five\":" + numberOrNull(tps.five())
+                    + ",\"fifteen\":" + numberOrNull(tps.fifteen())
+                    + ",\"raw\":" + JsonUtil.quote(tps.raw()) + "}";
             sendJson(exchange, 200, response);
         });
 
-        server.createContext("/metrics", exchange -> {
+        protectedContext(server, authFilter, "/metrics", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
@@ -72,7 +83,7 @@ public final class ApiHandlers {
             sendJson(exchange, snapshot.ok() ? 200 : 503, json);
         });
 
-        server.createContext("/mods", exchange -> {
+        protectedContext(server, authFilter, "/mods", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
@@ -82,7 +93,7 @@ public final class ApiHandlers {
             sendJson(exchange, snapshot.ok() ? 200 : 503, json);
         });
 
-        server.createContext("/status", exchange -> {
+        protectedContext(server, authFilter, "/status", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 send(exchange, 405, "Method Not Allowed");
                 return;
@@ -108,6 +119,13 @@ public final class ApiHandlers {
             json.append('}');
             sendJson(exchange, snapshot.ok() ? 200 : 207, json.toString());
         });
+    }
+
+    private static void protectedContext(HttpServer server, Filter authFilter, String path, HttpHandler handler) {
+        HttpContext context = server.createContext(path, handler);
+        if (authFilter != null) {
+            context.getFilters().add(authFilter);
+        }
     }
 
     private static void send(HttpExchange exchange, int status, String body) throws IOException {

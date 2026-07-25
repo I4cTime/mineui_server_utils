@@ -1,8 +1,6 @@
 package com.mineui.serverutils.service;
 
 import com.mineui.serverutils.config.AppConfig;
-import com.mineui.serverutils.rcon.RconClient;
-import com.mineui.serverutils.rcon.RconResponse;
 import com.mineui.serverutils.runtime.ServerRuntime;
 import com.mineui.serverutils.server.ServerProperties;
 import net.minecraftforge.fml.ModList;
@@ -12,37 +10,43 @@ import java.lang.management.ManagementFactory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class StatusService {
-    private final AppConfig config;
+    /**
+     * server.properties keys never returned over the API. rcon.password is the
+     * critical one — leaking it hands out full RCON command execution; the ports
+     * are withheld to avoid disclosing internal topology.
+     */
+    private static final Set<String> REDACTED_PROPERTY_KEYS =
+            Set.of("rcon.password", "rcon.port", "query.port");
+
+    private static final long SYSTEM_CACHE_TTL_NANOS = 1_000_000_000L; // 1s
+
     private final ServerProperties serverProperties;
     private final ServerRuntime runtime;
 
+    private SystemMetrics cachedSystemMetrics;
+    private long cachedSystemMetricsAtNanos;
+
     public StatusService(AppConfig config, ServerRuntime runtime) {
-        this.config = config;
         this.serverProperties = new ServerProperties(config.serverPropertiesPath());
         this.runtime = runtime;
     }
 
+    /** Loads server.properties with sensitive keys stripped out. */
     public Map<String, String> loadProperties() {
-        return serverProperties.load();
-    }
-
-    public PlayersResult fetchPlayers() {
-        if (config.rconPassword().isBlank()) {
-            return PlayersResult.error("RCON_PASSWORD is not set");
-        }
-        try (RconClient client = RconClient.connect(config)) {
-            RconResponse response = client.command("list");
-            if (!response.ok()) {
-                return PlayersResult.error(response.message());
+        Map<String, String> raw = serverProperties.load();
+        Map<String, String> safe = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : raw.entrySet()) {
+            if (!REDACTED_PROPERTY_KEYS.contains(entry.getKey())) {
+                safe.put(entry.getKey(), entry.getValue());
             }
-            return PlayersResult.ok(parsePlayers(response.message()));
-        } catch (Exception ex) {
-            return PlayersResult.error(ex.getMessage());
         }
+        return safe;
     }
 
     public PlayersResult fetchPlayersDirect() {
@@ -68,19 +72,17 @@ public final class StatusService {
         }
     }
 
-    public CommandResult fetchTps() {
-        if (config.rconPassword().isBlank()) {
-            return CommandResult.error("RCON_PASSWORD is not set");
+    /**
+     * TPS read from the in-JVM tick tracker. The mod runs inside the server, so
+     * this is real per-tick timing — no RCON round-trip and no dependency on a
+     * {@code tps} command that vanilla Forge does not have.
+     */
+    public TpsResult fetchTpsDirect() {
+        if (runtime == null || !runtime.isActive()) {
+            return TpsResult.error("Server runtime unavailable");
         }
-        try (RconClient client = RconClient.connect(config)) {
-            RconResponse response = client.command("tps");
-            if (!response.ok()) {
-                return CommandResult.error(response.message());
-            }
-            return CommandResult.ok(response.message());
-        } catch (Exception ex) {
-            return CommandResult.error(ex.getMessage());
-        }
+        ServerRuntime.MetricsSnapshot s = runtime.snapshot();
+        return TpsResult.ok(new TpsSnapshot(s.tpsOne(), s.tpsFive(), s.tpsFifteen(), s.tpsRaw()));
     }
 
     public StatusSnapshot snapshot() {
@@ -95,6 +97,8 @@ public final class StatusService {
         Double msptOne = null;
         Double msptFive = null;
         Double msptFifteen = null;
+        Map<String, ServerRuntime.DimensionSnapshot> dimensions = Map.of();
+        SystemMetrics systemMetrics = SystemMetrics.empty();
 
         PlayersResult playersResult = fetchPlayersDirect();
         if (playersResult.ok()) {
@@ -104,14 +108,6 @@ public final class StatusService {
             errors.add("players: " + playersResult.errorMessage());
         }
 
-        CommandResult tpsResult = fetchTps();
-        if (tpsResult.ok()) {
-            tpsRaw = tpsResult.output();
-        } else {
-            ok = false;
-            errors.add("tps: " + tpsResult.errorMessage());
-        }
-
         MetricsSnapshot metrics = metricsSnapshot();
         if (metrics.ok()) {
             chunks = metrics.chunks();
@@ -119,6 +115,14 @@ public final class StatusService {
             msptOne = metrics.msptOne();
             msptFive = metrics.msptFive();
             msptFifteen = metrics.msptFifteen();
+            dimensions = metrics.dimensions();
+            systemMetrics = metrics.systemMetrics();
+            if (metrics.tps() != null) {
+                tpsRaw = metrics.tps().raw();
+            }
+        } else {
+            ok = false;
+            errors.add("metrics: " + metrics.errorMessage());
         }
 
         return new StatusSnapshot(
@@ -133,32 +137,9 @@ public final class StatusService {
                 msptOne,
                 msptFive,
                 msptFifteen,
-                metrics.dimensions(),
-                metrics.systemMetrics()
+                dimensions,
+                systemMetrics
         );
-    }
-
-    private static List<String> parsePlayers(String response) {
-        if (response == null || response.isBlank()) {
-            return Collections.emptyList();
-        }
-        int colon = response.indexOf(':');
-        if (colon < 0 || colon == response.length() - 1) {
-            return Collections.emptyList();
-        }
-        String tail = response.substring(colon + 1).trim();
-        if (tail.isEmpty()) {
-            return Collections.emptyList();
-        }
-        String[] parts = tail.split(",");
-        List<String> players = new ArrayList<>();
-        for (String part : parts) {
-            String name = part.trim();
-            if (!name.isEmpty()) {
-                players.add(name);
-            }
-        }
-        return players;
     }
 
     public MetricsSnapshot metricsSnapshot() {
@@ -166,7 +147,6 @@ public final class StatusService {
             return MetricsSnapshot.error("Server runtime unavailable");
         }
         ServerRuntime.MetricsSnapshot snapshot = runtime.snapshot();
-        SystemMetrics systemMetrics = SystemMetrics.capture();
         return MetricsSnapshot.ok(
                 new TpsSnapshot(
                         snapshot.tpsOne(),
@@ -182,8 +162,23 @@ public final class StatusService {
                 snapshot.msptFive(),
                 snapshot.msptFifteen(),
                 snapshot.dimensions(),
-                systemMetrics
+                systemMetricsCached()
         );
+    }
+
+    /**
+     * System metrics are OS/cgroup probes; cache them briefly so a client
+     * hammering {@code /metrics} or {@code /status} cannot drive repeated file
+     * reads faster than they meaningfully change.
+     */
+    private synchronized SystemMetrics systemMetricsCached() {
+        long now = System.nanoTime();
+        if (cachedSystemMetrics != null && (now - cachedSystemMetricsAtNanos) < SYSTEM_CACHE_TTL_NANOS) {
+            return cachedSystemMetrics;
+        }
+        cachedSystemMetrics = SystemMetrics.capture();
+        cachedSystemMetricsAtNanos = now;
+        return cachedSystemMetrics;
     }
 
     public record PlayersResult(boolean ok, List<String> players, String errorMessage) {
@@ -208,13 +203,13 @@ public final class StatusService {
         }
     }
 
-    public record CommandResult(boolean ok, String output, String errorMessage) {
-        public static CommandResult ok(String output) {
-            return new CommandResult(true, output, "");
+    public record TpsResult(boolean ok, TpsSnapshot tps, String errorMessage) {
+        public static TpsResult ok(TpsSnapshot tps) {
+            return new TpsResult(true, tps, "");
         }
 
-        public static CommandResult error(String message) {
-            return new CommandResult(false, "", message == null ? "Unknown error" : message);
+        public static TpsResult error(String message) {
+            return new TpsResult(false, null, message == null ? "Unknown error" : message);
         }
     }
 
@@ -370,9 +365,8 @@ public final class StatusService {
             }
 
             try {
-                String containerName = System.getenv("PODMAN_CONTAINER_NAME");
-                com.mineui.serverutils.system.PodmanContainerStats.ContainerStats stats =
-                        com.mineui.serverutils.system.PodmanContainerStats.read(containerName);
+                com.mineui.serverutils.system.ContainerStatsReader.ContainerStats stats =
+                        com.mineui.serverutils.system.ContainerStatsReader.read();
                 if (stats != null) {
                     containerStats = new ContainerStats(
                             stats.name(),

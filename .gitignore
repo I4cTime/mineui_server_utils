@@ -1,7 +1,10 @@
 build/
 out/
+bin/
 .gradle/
 *.log
 *.class
 .idea/
 .vscode/
+.directory
+run/
