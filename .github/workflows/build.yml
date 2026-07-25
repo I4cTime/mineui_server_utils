@@ -43,7 +43,15 @@ jobs:
             # owner/repo is the first two path segments (handles gradle/actions/setup-gradle).
             repo=$(echo "$path" | cut -d/ -f1-2)
             latest=$(gh api "repos/$repo/releases/latest" --jq .tag_name 2>/dev/null || echo "")
-            [ -z "$latest" ] && latest=$(gh api "repos/$repo/tags" --jq '.[0].name' 2>/dev/null || echo "?")
+            # Some repos' "latest" release isn't the action's own version tag
+            # (e.g. github/codeql-action publishes codeql-bundle-vX.Y.Z
+            # releases alongside its vN action tags). If the release name
+            # doesn't look like a version, fall back to the newest tag that
+            # does.
+            if [ -z "$latest" ] || ! echo "$latest" | grep -qE '^v?[0-9]'; then
+              latest=$(gh api "repos/$repo/tags" --jq '[.[].name | select(test("^v?[0-9]+(\\.[0-9]+){0,2}$"))][0] // empty' 2>/dev/null || echo "")
+            fi
+            [ -z "$latest" ] && latest="?"
             cur_major=$(echo "$ref"    | sed -E 's/^v?([0-9]+).*/\1/')
             lat_major=$(echo "$latest" | sed -E 's/^v?([0-9]+).*/\1/')
             if [ "$cur_major" != "$lat_major" ] && [ "$latest" != "?" ]; then
