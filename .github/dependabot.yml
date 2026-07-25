@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Keep GitHub Actions current. The check-action-versions job in build.yml is
+  # the fallback for anything Dependabot doesn't (or can't) open a PR for.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Gradle plugins and Java dependencies (ForgeGradle, Foojay, slf4j, paper-api).
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      gradle:
+        patterns: ["*"]

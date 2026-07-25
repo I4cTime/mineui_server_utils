@@ -4,28 +4,73 @@ on:
   push:
     branches: [main, harden-api]
   pull_request:
+  schedule:
+    # Weekly canary: rebuilds and re-checks action currency even with no pushes.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 jobs:
+  # Fallback for updates Dependabot can't make (e.g. a major bump it hasn't
+  # opened yet, or SHA pins): compare each pinned action to its latest release
+  # and fail loudly if any are behind. Does not gate `build` — it's a signal.
+  check-action-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare pinned actions to latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          outdated=0
+          # Collect unique owner/repo@ref from all workflow files.
+          refs=$(grep -rhoE 'uses:\s*[^ ]+@[^ ]+' .github/workflows \
+            | sed -E 's/uses:\s*//' | sort -u)
+          {
+            echo "| Action | Pinned | Latest | Status |"
+            echo "| --- | --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for entry in $refs; do
+            path="${entry%@*}"; ref="${entry#*@}"
+            case "$path" in ./*|docker://*) continue;; esac
+            # owner/repo is the first two path segments (handles gradle/actions/setup-gradle).
+            repo=$(echo "$path" | cut -d/ -f1-2)
+            latest=$(gh api "repos/$repo/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+            [ -z "$latest" ] && latest=$(gh api "repos/$repo/tags" --jq '.[0].name' 2>/dev/null || echo "?")
+            cur_major=$(echo "$ref"    | sed -E 's/^v?([0-9]+).*/\1/')
+            lat_major=$(echo "$latest" | sed -E 's/^v?([0-9]+).*/\1/')
+            if [ "$cur_major" != "$lat_major" ] && [ "$latest" != "?" ]; then
+              status="⚠️ outdated"; outdated=1
+              echo "::warning::$path is pinned at $ref but latest is $latest"
+            else
+              status="✅ current"
+            fi
+            echo "| $path | $ref | $latest | $status |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit $outdated
+
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build all modules
         run: ./gradlew build --no-daemon --stacktrace
 
       - name: Upload jars
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mineui-server-utils-jars
           path: |
