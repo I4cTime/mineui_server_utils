@@ -20,5 +20,25 @@ updates:
     commit-message:
       prefix: build
     groups:
+      # Batch routine minor/patch bumps; majors open as individual PRs so
+      # they get scrutiny instead of riding along with routine updates (this
+      # is how the FG7 + Gradle 9 combo slipped through as one grouped PR).
       gradle:
         patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # MC 1.20.1 Forge mods are built against ForgeGradle 6.x. FG7 removed
+      # copyIdeResources and other APIs this build relies on -- staying on
+      # 6.x is deliberate, not lag. Revisit only alongside a MC/Forge target
+      # bump.
+      - dependency-name: "net.minecraftforge.gradle"
+        update-types: ["version-update:semver-major"]
+      # Gradle 9 turns this project's `by project` delegate usage into a
+      # build error, and the documented MC 1.20.1 Forge toolchain is Gradle
+      # 8.x. "gradle" is Dependabot's dependency name for the wrapper
+      # (gradle-wrapper.properties distributionUrl) under the gradle
+      # ecosystem.
+      - dependency-name: "gradle"
+        update-types: ["version-update:semver-major"]
