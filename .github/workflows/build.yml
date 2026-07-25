@@ -9,6 +9,11 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+# Least privilege: both jobs only read. Explicit here so a future change to the
+# repo/org default workflow permissions can't silently grant this workflow more.
+permissions:
+  contents: read
+
 jobs:
   # Fallback for updates Dependabot can't make (e.g. a major bump it hasn't
   # opened yet, or SHA pins): compare each pinned action to its latest release
@@ -69,7 +74,9 @@ jobs:
         run: ./gradlew build --no-daemon --stacktrace
 
       - name: Upload jars
-        if: success()
+        # Skip on PRs: a public repo's PR-run artifacts are world-downloadable,
+        # and jars from an untrusted fork build shouldn't look like trusted output.
+        if: success() && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: mineui-server-utils-jars
