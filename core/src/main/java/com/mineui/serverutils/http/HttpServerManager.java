@@ -3,9 +3,9 @@ package com.mineui.serverutils.http;
 import com.mineui.serverutils.config.AppConfig;
 import com.mineui.serverutils.runtime.ServerRuntime;
 import com.mineui.serverutils.service.StatusService;
-import com.mojang.logging.LogUtils;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public final class HttpServerManager {
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(HttpServerManager.class);
     private static final int WORKER_THREADS = 4;
 
     private HttpServer server;

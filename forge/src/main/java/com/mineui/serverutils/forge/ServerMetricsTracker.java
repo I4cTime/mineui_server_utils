@@ -1,4 +1,4 @@
-package com.mineui.serverutils.runtime;
+package com.mineui.serverutils.forge;
 
 public final class ServerMetricsTracker {
     private final RollingAverage oneMinute = new RollingAverage(1200);

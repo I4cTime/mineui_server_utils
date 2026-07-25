@@ -3,8 +3,6 @@ package com.mineui.serverutils.service;
 import com.mineui.serverutils.config.AppConfig;
 import com.mineui.serverutils.runtime.ServerRuntime;
 import com.mineui.serverutils.server.ServerProperties;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.forgespi.language.IModInfo;
 
 import java.lang.management.ManagementFactory;
 import java.time.Instant;
@@ -57,14 +55,13 @@ public final class StatusService {
     }
 
     public ModListSnapshot fetchMods() {
+        if (runtime == null || !runtime.isActive()) {
+            return ModListSnapshot.error("Server runtime unavailable");
+        }
         try {
             List<ModEntry> mods = new ArrayList<>();
-            for (IModInfo mod : ModList.get().getMods()) {
-                mods.add(new ModEntry(
-                        mod.getModId(),
-                        mod.getDisplayName(),
-                        mod.getVersion().toString()
-                ));
+            for (ServerRuntime.ModInfo mod : runtime.listMods()) {
+                mods.add(new ModEntry(mod.id(), mod.name(), mod.version()));
             }
             return ModListSnapshot.ok(mods);
         } catch (Exception ex) {

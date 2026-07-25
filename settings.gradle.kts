@@ -6,3 +6,5 @@ pluginManagement {
 }
 
 rootProject.name = "mineui-server-utils"
+
+include("core", "forge", "paper")

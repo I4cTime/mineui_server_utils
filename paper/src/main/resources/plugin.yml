@@ -1,0 +1,7 @@
+name: MineUIServerUtils
+main: com.mineui.serverutils.paper.PaperPlugin
+version: ${version}
+api-version: '1.20'
+description: Exposes Minecraft server information over HTTP for MineUI.
+author: MineUI
+load: POSTWORLD

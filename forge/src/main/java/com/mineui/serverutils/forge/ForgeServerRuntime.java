@@ -1,14 +1,18 @@
-package com.mineui.serverutils.runtime;
+package com.mineui.serverutils.forge;
 
+import com.mineui.serverutils.runtime.ServerRuntime;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraftforge.fml.ModList;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class ServerRuntime {
+/** Forge implementation of {@link ServerRuntime}, reading server internals in-JVM. */
+public final class ForgeServerRuntime implements ServerRuntime {
     private MinecraftServer server;
     private ServerMetricsTracker tracker;
 
@@ -22,16 +26,39 @@ public final class ServerRuntime {
         this.tracker = null;
     }
 
-    public boolean isActive() {
-        return server != null;
-    }
-
     public void recordTick() {
         if (tracker != null) {
             tracker.recordTick();
         }
     }
 
+    @Override
+    public boolean isActive() {
+        return server != null;
+    }
+
+    @Override
+    public List<String> getPlayerNames() {
+        if (server == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        server.getPlayerList().getPlayers().forEach(player -> names.add(player.getGameProfile().getName()));
+        return names;
+    }
+
+    @Override
+    public List<ModInfo> listMods() {
+        List<ModInfo> mods = new ArrayList<>();
+        ModList.get().getMods().forEach(mod -> mods.add(new ModInfo(
+                mod.getModId(),
+                mod.getDisplayName(),
+                mod.getVersion().toString()
+        )));
+        return mods;
+    }
+
+    @Override
     public MetricsSnapshot snapshot() {
         if (server == null || tracker == null) {
             return MetricsSnapshot.empty();
@@ -57,18 +84,15 @@ public final class ServerRuntime {
         double five = tracker.getTpsFive();
         double fifteen = tracker.getTpsFifteen();
         String raw = String.format("TPS avg 1m/5m/15m: %.2f, %.2f, %.2f", one, five, fifteen);
-        double msptOne = tracker.getMsptOne();
-        double msptFive = tracker.getMsptFive();
-        double msptFifteen = tracker.getMsptFifteen();
 
         return new MetricsSnapshot(
                 one,
                 five,
                 fifteen,
                 raw,
-                msptOne,
-                msptFive,
-                msptFifteen,
+                tracker.getMsptOne(),
+                tracker.getMsptFive(),
+                tracker.getMsptFifteen(),
                 chunks,
                 entities,
                 online,
@@ -104,34 +128,4 @@ public final class ServerRuntime {
             return null;
         }
     }
-
-    public List<String> getPlayerNames() {
-        if (server == null) {
-            return List.of();
-        }
-        List<String> names = new ArrayList<>();
-        server.getPlayerList().getPlayers().forEach(player -> names.add(player.getGameProfile().getName()));
-        return names;
-    }
-
-    public record MetricsSnapshot(
-            double tpsOne,
-            double tpsFive,
-            double tpsFifteen,
-            String tpsRaw,
-            double msptOne,
-            double msptFive,
-            double msptFifteen,
-            Integer chunks,
-            Integer entities,
-            int playersOnline,
-            int playersMax,
-            Map<String, DimensionSnapshot> dimensions
-    ) {
-        public static MetricsSnapshot empty() {
-            return new MetricsSnapshot(20.0, 20.0, 20.0, "", 0.0, 0.0, 0.0, null, null, 0, 0, Map.of());
-        }
-    }
-
-    public record DimensionSnapshot(Integer chunks, Integer entities) {}
 }
