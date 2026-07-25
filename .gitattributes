@@ -1,0 +1,33 @@
+# Auto-detect text files and normalize line endings to LF in the repo.
+* text=auto eol=lf
+
+# Java sources
+*.java text diff=java
+
+# Gradle
+*.gradle text diff=java
+*.gradle.kts text diff=java
+gradle.properties text
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+gradle-wrapper.properties text
+gradle-wrapper.jar binary
+
+# Config / data
+*.json text
+*.toml text
+*.yml text
+*.yaml text
+*.xml text
+*.md text
+.editorconfig text
+.gitattributes text
+.gitignore text
+
+# Binaries
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.zip binary
