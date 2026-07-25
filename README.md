@@ -1,88 +1,72 @@
-# MineUI Server Utils
+<h1 align="center">MineUI Server Utils</h1>
 
-An in-server agent that exposes live Minecraft server information to the
-[MineUI](../mineui) desktop app over a small HTTP API.
+<p align="center">
+  <b>The in-server agent behind MineUI's enriched metrics.</b><br>
+  A Forge mod / Paper plugin that exposes live Minecraft server data over<br>
+  a small, authenticated HTTP API — because it runs inside the JVM, it sees<br>
+  what a detached process can't.
+</p>
 
-Because it runs inside the server JVM, it reports data a detached process
-cannot reach: real tick-based TPS/MSPT, loaded chunk and entity counts per
-dimension/world, the actual loaded mod/plugin list, and — when the server runs
-in a container — the container's own cgroup resource usage.
+<p align="center">
+  <a href="https://github.com/I4cTime/mineui_server_utils/actions/workflows/build.yml"><img src="https://github.com/I4cTime/mineui_server_utils/actions/workflows/build.yml/badge.svg" alt="build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/platform-Java%2017%20%7C%20Minecraft%201.20.1-informational" alt="Platform: Java 17, Minecraft 1.20.1">
+</p>
 
-> This is a server mod/plugin, not a standalone jar. There is no `main()` and
-> `java -jar` will not work. Install the built jar into your server.
+<p align="center">
+  <a href="#why-mineui-server-utils">Why</a> &middot;
+  <a href="#install">Install</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#development">Development</a> &middot;
+  <a href="#license">License</a>
+</p>
 
-## Modules
+---
 
-The project is a Gradle multi-project split into a loader-agnostic core and
-thin per-platform adapters:
+## Why MineUI Server Utils?
 
-| Module | Output | Target |
-| --- | --- | --- |
-| `core` | (bundled into the adapters) | HTTP API, auth, JSON, config, system/cgroup stats, and the `ServerRuntime` interface — no Minecraft/loader imports |
-| `forge` | Forge mod jar | Forge **1.20.1** |
-| `paper` | Bukkit plugin jar | Paper/Spigot/Purpur/Folia and Bukkit-compatible hybrids (Mohist, Arclight, …) |
+[MineUI](https://github.com/I4cTime/mineui) can already read TPS and player
+data from outside the server — an RCON `tps` command, a status ping — but
+that view is limited: no true per-window MSPT, no per-dimension chunk/entity
+counts, no accurate loaded-mod list, and no way to see a container's own
+cgroup resource usage from inside it.
 
-Adding a new platform (Fabric, NeoForge) is a new adapter module implementing
-`ServerRuntime`; the core never changes.
-
-## Requirements
-
-- JDK **17** to build (selected automatically by the Gradle toolchain)
-- Forge adapter: Minecraft **1.20.1**, Forge **47.4.0** (see `gradle.properties`)
-- Paper adapter: Bukkit API **1.20.1** (`paperApiVersion` in `gradle.properties`)
-
-## Build
-
-```bash
-./gradlew build          # builds all modules
-./gradlew :forge:build   # Forge mod only
-./gradlew :paper:build   # Paper plugin only
-```
-
-Output jars:
-
-```
-forge/build/libs/forge-<version>.jar
-paper/build/libs/paper-<version>.jar
-```
-
-The Gradle wrapper is committed, so no local Gradle install is required. The
-first Forge build downloads Forge's userdev artifacts and Minecraft mappings
-and may take several minutes.
+MineUI Server Utils closes that gap by running *inside* the server JVM as a
+mod or plugin and exposing what it sees over a small HTTP API, so MineUI (or
+anything else) can read it. It is not a standalone jar — there's no `main()`
+and `java -jar` won't work; it has to be loaded by a Forge or Paper server.
 
 ## Install
 
-- **Forge:** drop the forge jar into the server's `mods/` directory.
-- **Paper/Bukkit:** drop the paper jar into the server's `plugins/` directory.
+- **Forge:** drop the built jar into the server's `mods/` directory.
+- **Paper/Bukkit:** drop the built jar into the server's `plugins/`
+  directory.
 
-Restart the server. The API comes up when the server finishes starting and
-shuts down with it.
+Restart the server — the API comes up when the server finishes starting and
+shuts down with it. There's no packaged release yet; build the jars yourself
+— see [Development](#development).
 
-## Configuration (environment variables)
+## Features
 
-| Variable | Default | Purpose |
+### Two adapters, one core
+
+A Gradle multi-project split into a loader-agnostic `core` (HTTP API, auth,
+JSON, config, system/cgroup stats — no Minecraft/loader imports) and thin
+per-platform adapters implementing a shared `ServerRuntime` interface:
+
+| Module | Output | Target |
 | --- | --- | --- |
-| `HTTP_HOST` | `127.0.0.1` | Bind address. Loopback by default. Binding a non-loopback address (e.g. `0.0.0.0`) **requires** `MINEUI_SERVER_UTILS_TOKEN`; without it the API refuses to start. |
-| `HTTP_PORT` | `8787` | Listen port. |
-| `MINEUI_SERVER_UTILS_TOKEN` | _(unset)_ | Shared secret. When set, every endpoint except `/health` requires `Authorization: Bearer <token>`. Required to expose the API off-host. |
-| `SERVER_PROPERTIES_PATH` | `<serverDir>/server.properties` | Path to `server.properties`. |
+| `core` | (bundled into the adapters) | Shared logic, no MC/loader imports |
+| `forge` | Forge mod jar | Forge **1.20.1** |
+| `paper` | Bukkit plugin jar | Paper/Spigot/Purpur/Folia and Bukkit-compatible hybrids (Mohist, Arclight, …) |
 
-### Security model
+Adding a new platform (Fabric, NeoForge) means a new adapter module
+implementing `ServerRuntime`; the core never changes.
 
-- **Loopback-only by default.** Out of the box the API is reachable only from
-  the same machine, so a local MineUI instance works with zero config.
-- **Remote access is opt-in and authenticated.** To let another machine on the
-  LAN (e.g. MineUI on a laptop, server on a desktop) reach it, set both
-  `HTTP_HOST=0.0.0.0` and a strong `MINEUI_SERVER_UTILS_TOKEN`. The server will
-  not bind a public interface without a token.
-- **`server.properties` is filtered.** `rcon.password`, `rcon.port`, and
-  `query.port` are never returned by `/properties` or `/status`.
-- Tokens are compared in constant time.
+### Endpoints
 
-## Endpoints
-
-All return JSON except `/health`. All except `/health` require the bearer token
-when one is configured.
+All responses are JSON except `/health`. All except `/health` require the
+bearer token when one is configured.
 
 | Endpoint | Returns |
 | --- | --- |
@@ -94,21 +78,64 @@ when one is configured.
 | `GET /mods` | `{ ok, mods[] }` — loaded mods (Forge) or plugins (Paper) as id/name/version |
 | `GET /status` | Aggregate of properties, players, tps, metrics, and system stats |
 
-Example:
-
 ```bash
 curl -H "Authorization: Bearer $MINEUI_SERVER_UTILS_TOKEN" \
   http://127.0.0.1:8787/metrics
 ```
 
-## Notes
+### Loopback-only by default, authenticated when remote
 
-- **Container stats** are read directly from the kernel cgroup interface
-  (`/sys/fs/cgroup`), so they work from inside a Podman/Docker container with no
-  `podman`/`docker` CLI present. They are only reported when the process is
-  actually containerized; on a bare-metal server the host-level metrics apply
-  instead.
-- **Paper MSPT** is a single rolling average (`Bukkit.getAverageTickTime()`);
-  the 1m/5m/15m fields all report that value since Bukkit has no per-window
-  MSPT breakdown. The Forge adapter reports true per-window MSPT from its own
-  tick tracker.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HTTP_HOST` | `127.0.0.1` | Bind address. Binding non-loopback (e.g. `0.0.0.0`) **requires** `MINEUI_SERVER_UTILS_TOKEN` — the API refuses to start without it. |
+| `HTTP_PORT` | `8787` | Listen port. |
+| `MINEUI_SERVER_UTILS_TOKEN` | _(unset)_ | Shared secret. When set, every endpoint except `/health` requires `Authorization: Bearer <token>`, compared in constant time. |
+| `SERVER_PROPERTIES_PATH` | `<serverDir>/server.properties` | Path to `server.properties`. |
+
+Out of the box the API is reachable only from the same machine, so a local
+MineUI instance works with zero config. To let another machine (e.g. MineUI
+on a laptop, server on a desktop) reach it, set both `HTTP_HOST=0.0.0.0` and
+a strong token — the server won't bind a public interface without one.
+`rcon.password`, `rcon.port`, and `query.port` are always stripped from
+`/properties` and `/status`.
+
+### Container-aware, without a container CLI
+
+CPU/memory stats are read directly from the kernel cgroup interface
+(`/sys/fs/cgroup`), so they work from inside a Podman/Docker container with
+no `podman`/`docker` CLI present. They're only reported when the process is
+actually containerized; a bare-metal server gets host-level metrics instead.
+
+### One caveat: Paper's MSPT is a single average
+
+Paper reports `Bukkit.getAverageTickTime()`, so the 1m/5m/15m fields in
+`/tps` and `/metrics` all report that same rolling value — Bukkit has no
+per-window MSPT breakdown. The Forge adapter reports true per-window MSPT
+from its own tick tracker.
+
+## Development
+
+Requires **JDK 17** (auto-provisioned by the Gradle toolchain's Foojay
+resolver if you don't have one). The Gradle wrapper is committed, so no
+local Gradle install is needed.
+
+```bash
+./gradlew build          # builds and tests all modules
+./gradlew :forge:build   # Forge mod only
+./gradlew :paper:build   # Paper plugin only
+```
+
+Output jars: `forge/build/libs/forge-<version>.jar` and
+`paper/build/libs/paper-<version>.jar`. The first Forge build downloads
+Forge's userdev artifacts and Minecraft mappings and can take several
+minutes.
+
+CI (`.github/workflows/build.yml`, workflow name `build`) runs
+`./gradlew build --no-daemon --stacktrace` on every push and PR, plus a
+weekly job that flags any pinned GitHub Action that's fallen behind a major
+version. See [CONTRIBUTING.md](CONTRIBUTING.md) for module boundaries and PR
+conventions.
+
+## License
+
+AGPL-3.0-only — see [LICENSE](LICENSE).
