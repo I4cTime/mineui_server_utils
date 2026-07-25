@@ -1,0 +1,123 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in mineui_server_utils
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the details below.
+
+        **If this is a security vulnerability, do NOT open an issue.** Use our [security reporting process](https://github.com/I4cTime/mineui_server_utils/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: mineui_server_utils version
+      description: "The mod/plugin version, e.g. from the jar filename or your server's plugin/mod list."
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of mineui_server_utils is affected?
+      options:
+        - Forge adapter
+        - Paper adapter
+        - core HTTP API
+        - Build (Gradle)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+      placeholder: "When I call GET /metrics, it returns..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Start the server with MINEUI_SERVER_UTILS_TOKEN set
+        2. curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8787/metrics
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened. Include error messages, stack traces, or server log lines if available.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Server platform
+      options:
+        - Forge 1.20.1
+        - Paper
+        - Spigot
+        - Purpur
+        - Folia
+        - Bukkit-compatible hybrid (Mohist, Arclight, ...)
+        - Other / Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: mc-version
+    attributes:
+      label: Minecraft / server version
+      placeholder: "1.20.1"
+    validations:
+      required: true
+
+  - type: input
+    id: java
+    attributes:
+      label: Java version
+      description: "Run `java -version` on the server host."
+      placeholder: "Temurin 17.0.12"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: containerized
+    attributes:
+      label: Running in a container?
+      options:
+        - "No — bare metal / VM"
+        - "Yes — Docker"
+        - "Yes — Podman"
+        - "Yes — other"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context — server logs, screenshots, related issues, etc.
+    validations:
+      required: false
