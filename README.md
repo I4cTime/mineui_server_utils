@@ -11,6 +11,7 @@
   <a href="https://github.com/I4cTime/mineui_server_utils/actions/workflows/build.yml"><img src="https://github.com/I4cTime/mineui_server_utils/actions/workflows/build.yml/badge.svg" alt="build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-Java%2017%20%7C%20Minecraft%201.20.1-informational" alt="Platform: Java 17, Minecraft 1.20.1">
+  <a href="https://discord.gg/5uEApw5uEz"><img src="https://img.shields.io/badge/discord-join%20the%20studio-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
