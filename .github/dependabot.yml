@@ -5,7 +5,8 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 9 * * mon#1,mon#2"
     commit-message:
       prefix: ci
     groups:
@@ -16,7 +17,8 @@ updates:
   - package-ecosystem: gradle
     directory: /
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 9 * * mon#1,mon#2"
     commit-message:
       prefix: build
     groups:
