@@ -39,7 +39,7 @@ The project is a Gradle multi-project split into a loader-agnostic core and thin
 
 - `build.yml` runs `./gradlew build --no-daemon --stacktrace` on every push/PR against JDK 17.
 - A separate **action-currency** job (`check-action-versions`) compares every pinned GitHub Action in `.github/workflows/` to its latest upstream release and fails loudly (with a summary table) if any are behind a major version — a fallback for updates Dependabot can't open on its own (e.g. SHA pins). It doesn't gate `build`; treat its failures as a signal to update the pin, not a blocker to override.
-- Dependabot keeps GitHub Actions (`ci` commit prefix) and Gradle plugins/dependencies (`build` commit prefix) current on a weekly schedule — don't hand-roll version bump PRs for things Dependabot already covers.
+- Dependabot keeps GitHub Actions (`ci` commit prefix) and Gradle plugins/dependencies (`build` commit prefix) current on the first and second Monday of each month — don't hand-roll version bump PRs for things Dependabot already covers.
 
 ## CHANGELOG
 
